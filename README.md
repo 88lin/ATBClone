@@ -2,6 +2,8 @@
 
 # ATBClone (macOS Application Cloning Engine)
 
+[![Tests](https://github.com/aitobox/ATBClone/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/aitobox/ATBClone/actions/workflows/test.yml)
+
 > 🚀 **ATBClone** is a modern application multi-instancing and clone management engine designed for macOS. It supports isolated user data directories, independent network proxies (HTTP / SOCKS5), automated recipe matching, ad-hoc code re-signing, and sandbox removal.
 >
 > 📖 **Looking for a beginner-friendly tutorial?** Check out the complete **[ATBClone User Manual (English)](docs/guide/en/README.md)** | **[中文使用手册](docs/guide/zh-cn/README.md)**.

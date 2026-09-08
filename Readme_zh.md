@@ -2,6 +2,8 @@
 
 # ATBClone (macOS 应用多开引擎)
 
+[![Tests](https://github.com/aitobox/ATBClone/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/aitobox/ATBClone/actions/workflows/test.yml)
+
 > 🚀 **ATBClone** 是一个专为 macOS 设计的现代化应用程序多开（Multi-Instancing）与分身管理引擎。支持独立数据隔离、独立网络代理（HTTP / SOCKS5）、自动化规则匹配、重签名与沙盒解除。
 >
 > 📖 **新手小白入门指引？** 请查阅手把手图文操作指南：**[ATBClone 中文使用手册](docs/guide/zh-cn/README.md)** | **[English Manual](docs/guide/en/README.md)**。
