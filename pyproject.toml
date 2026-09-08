@@ -11,7 +11,7 @@ license-files = ["LICENSE"]
 authors = [
     { name = "Brain Zhang" }
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
     "click>=8.1",
     "pydantic>=2.0",
