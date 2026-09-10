@@ -4,6 +4,14 @@
 
 En este documento se registran todas las actualizaciones principales, nuevas características, mejoras de rendimiento y correcciones de errores para **ATBClone**.
 
+## [v1.5.1] - 2026-09-10
+
+### 💬 Aislamiento multiinstancia de Tencent Meeting (Wemeet)
+- **N reuniones simultáneas**:
+  - Nuevo interruptor del motor `patch_wemeet_isolation` y recetas integradas para `com.tencent.meeting` y `com.tencent.wemeet`.
+  - Causa raíz corregida: Tencent Meeting codifica dos bloqueos singleton globales que ignoran el HOME/TMPDIR de cada clon — `MD5("com.tencent.wemeet.WemeetLauncher")` y `MD5("com.tencent.meeting")` en `/tmp`. Las instancias perdedoras se reenviaban vía SendMessage y salían con exit(2), así que solo corrían la app principal y un clon.
+  - Cada clon recibe reemplazo de igual longitud (`WemeetLauncher→WemeetLauncheX`, `com.tencent.meeting→com.tencent.meetinX`, solo binarios Mach-O): archivos de bloqueo y servicios Mach separados, más eliminación de `CFBundleURLTypes` contra la activación mutua `wemeet://`.
+
 ## [v1.5.0] - 2026-09-10
 
 ### 🔐 Autenticación de proxy y almacenamiento seguro en Keychain

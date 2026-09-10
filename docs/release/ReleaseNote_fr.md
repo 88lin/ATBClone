@@ -4,6 +4,14 @@
 
 Ce document répertorie l'ensemble des mises à jour majeures, nouvelles fonctionnalités, optimisations et correctifs apportés à **ATBClone**.
 
+## [v1.5.1] - 2026-09-10
+
+### 💬 Isolation multi-instance Tencent Meeting (Wemeet)
+- **N réunions simultanées** :
+  - Nouveau commutateur moteur `patch_wemeet_isolation` et recettes intégrées pour `com.tencent.meeting` et `com.tencent.wemeet`.
+  - Cause racine corrigée : Tencent Meeting code en dur deux verrous singleton globaux qui ignorent HOME/TMPDIR par clone — `MD5("com.tencent.wemeet.WemeetLauncher")` et `MD5("com.tencent.meeting")` sous `/tmp`. Les instances perdantes étaient réacheminées via SendMessage puis quittaient en exit(2) : seules l'app principale et un clone pouvaient tourner.
+  - Chaque clone reçoit un remplacement de longueur identique (`WemeetLauncher→WemeetLauncheX`, `com.tencent.meeting→com.tencent.meetinX`, binaires Mach-O uniquement) : fichiers de verrou et services Mach distincts, plus suppression de `CFBundleURLTypes` contre l'activation mutuelle `wemeet://`.
+
 ## [v1.5.0] - 2026-09-10
 
 ### 🔐 Authentification proxy & Stockage sécurisé dans le trousseau (Keychain)

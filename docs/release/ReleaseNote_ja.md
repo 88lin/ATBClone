@@ -4,6 +4,14 @@
 
 このドキュメントには、**ATBClone** のすべての重要な更新、新機能、パフォーマンスの改善、およびバグ修正が記録されています。
 
+## [v1.5.1] - 2026-09-10
+
+### 💬 Tencent Meeting（Wemeet）多重起動分離
+- **N 多重起動での同時会議参加**：
+  - 新しい `patch_wemeet_isolation` エンジンスイッチと、`com.tencent.meeting` / `com.tencent.wemeet` 用ビルトインレシピを追加。
+  - 根本原因を修正：Tencent Meeting は HOME/TMPDIR を無視する 2 つのグローバル・シングルトンロックをハードコード（`/tmp` 下の `MD5("com.tencent.wemeet.WemeetLauncher")` と `MD5("com.tencent.meeting")`）。ロック取得に失敗したインスタンスは SendMessage 経由で転送後に exit(2) していたため、本体＋1 分身までしか動作しなかった。
+  - 各分身に等長ロック文字列置換を適用（`WemeetLauncher→WemeetLauncheX`、`com.tencent.meeting→com.tencent.meetinX`、Mach-O バイナリのみ）。ロックファイルと Mach サービス名が分離され、`CFBundleURLTypes` 削除により `wemeet://` 相互起動も防止。
+
 ## [v1.5.0] - 2026-09-10
 
 ### 🔐 プロキシ認証と Keychain 安全ストレージ

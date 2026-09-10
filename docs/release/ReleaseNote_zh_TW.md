@@ -4,6 +4,14 @@
 
 本檔案記錄了 **ATBClone** 的所有重要更新、新功能、效能最佳化及問題修復。
 
+## [v1.5.1] - 2026-09-10
+
+### 💬 騰訊會議多開隔離
+- **N 開同時與會**：
+  - 新增 `patch_wemeet_isolation` 引擎開關，以及 `com.tencent.meeting` / `com.tencent.wemeet` 內建配方。
+  - 修復根因：騰訊會議把兩把全域單例鎖寫死，不走分身的 HOME/TMPDIR —— `/tmp` 下的 `MD5("com.tencent.wemeet.WemeetLauncher")` 與 `MD5("com.tencent.meeting")`。搶不到鎖的實例經 SendMessage 轉發後 exit(2) 退出，之前只能主程式加一個分身運行。
+  - 每個分身做等長尾字元替換（`WemeetLauncher→WemeetLauncheX`、`com.tencent.meeting→com.tencent.meetinX`，僅 Mach-O 二進位），鎖檔案與 Mach 服務名稱各自獨立，並刪除 `CFBundleURLTypes` 防止 `wemeet://` 互相喚起。
+
 ## [v1.5.0] - 2026-09-10
 
 ### 🔐 代理認證與 Keychain 安全儲存
