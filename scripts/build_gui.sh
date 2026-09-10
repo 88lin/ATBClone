@@ -201,9 +201,12 @@ sanitize_filesystem "build"
 # ── 7. briefcase create ───────────────────────────────────────────────────── #
 APP_DIR="build/atbclone/macos/app"
 PY_FRAMEWORK="${APP_DIR}/ATBClone.app/Contents/Frameworks/Python.framework"
-if [[ ! -d "${APP_DIR}" ]] || [[ ! -d "${PY_FRAMEWORK}" ]]; then
-    if [[ -d "${APP_DIR}" && ! -d "${PY_FRAMEWORK}" ]]; then
-        echo "[!] Incomplete scaffolding detected (Python.framework missing). Recreating..."
+APP_STUB="${APP_DIR}/ATBClone.app/Contents/MacOS/Stub"
+APP_BIN="${APP_DIR}/ATBClone.app/Contents/MacOS/ATBClone"
+
+if [[ ! -d "${APP_DIR}" ]] || [[ ! -d "${PY_FRAMEWORK}" ]] || [[ ( ! -f "${APP_STUB}" && ! -f "${APP_BIN}" ) ]]; then
+    if [[ -d "${APP_DIR}" ]]; then
+        echo "[!] Incomplete scaffolding detected (framework or binary stub missing). Recreating..."
         rm -rf "${APP_DIR}"
     fi
     echo ""
@@ -227,6 +230,14 @@ if [[ -z "${APP_BUNDLE}" || ! -d "${APP_BUNDLE}" ]]; then
 fi
 if [[ ! -d "${APP_BUNDLE}/Contents/Frameworks/Python.framework" ]]; then
     echo "[-] Error: Python.framework is missing from ${APP_BUNDLE}/Contents/Frameworks/." >&2
+    exit 1
+fi
+if [[ ! -f "${APP_BUNDLE}/Contents/MacOS/ATBClone" ]]; then
+    echo "[-] Error: Executable ATBClone is missing from ${APP_BUNDLE}/Contents/MacOS/." >&2
+    exit 1
+fi
+if [[ ! -x "${APP_BUNDLE}/Contents/MacOS/ATBClone" ]]; then
+    echo "[-] Error: ATBClone in ${APP_BUNDLE}/Contents/MacOS/ is not executable." >&2
     exit 1
 fi
 if [[ ! -f "${APP_BUNDLE}/Contents/Resources/app/atbclone/__main__.py" ]]; then
@@ -270,7 +281,7 @@ touch "${APP_BUNDLE}"
 if [[ -f "${APP_BUNDLE}/Contents/Resources/atbclone.icns" || -f "${APP_BUNDLE}/Contents/Resources/ATBClone.icns" || -f "${APP_BUNDLE}/Contents/Resources/logo.icns" || -f "${APP_BUNDLE}/Contents/Resources/icon.icns" ]]; then
     echo "[+] App bundle icon verified in: ${APP_BUNDLE}/Contents/Resources/"
 fi
-echo "[+] Bundle integrity verified: Python.framework & entrypoint present."
+echo "[+] Bundle integrity verified: Python.framework, executable & entrypoint present."
 
 # ── 9. briefcase package  (produces .dmg) ────────────────────────────────── #
 echo ""
