@@ -1,0 +1,12 @@
+bundle_id: com.tencent.wemeet
+app_name: 腾讯会议
+strategy: hard_clone
+app_type: cocoa
+strip_sandbox: true
+patch_wemeet_isolation: true
+strip_url_schemes: true
+environment_injection:
+  HOME: '{{ATB_DATA_DIR}}/Home'
+  TMPDIR: '{{ATB_DATA_DIR}}/Tmp'
+symlink_whitelist:
+- Library/Keychains
