@@ -4,6 +4,40 @@
 
 本文档记录了 **ATBClone** 的所有重要更新、新功能、性能优化及问题修复。
 
+## [v1.5.0] - 2026-09-10
+
+### 🔐 代理认证与 Keychain 安全存储
+- **代理凭据支持与钥匙串安全存储**：
+  - `ProxyConfig` 数据模型新增 `username` 和 `password` 字段，全面支持带身份验证的 SOCKS5 与 HTTP 代理。
+  - 新增 `atbclone.core.keychain` 模块，代理密码默认优先存入 macOS 系统钥匙串（Keychain Services / `security` 工具），杜绝配置文件中明文泄露密码风险。
+  - CLI `clone`、`update` 及 `wizard` 命令新增 `--proxy-username` 与 `--proxy-password` 参数，并支持交互式终端安全密码输入。
+  - GUI 克隆向导（`WizardWindow`）、分身编辑窗口（`CloneEditWindow`）与全局设置（`SettingsView`）全面集成代理凭据输入与 Keychain 存储控制。
+  - 在 `clone_inspector`、CLI `list` 以及 GUI 卡片/详情/列表视图中统一接入凭据脱敏（`redact_url_credentials`），防止密码在终端输出或日志中泄露。
+
+### 🛠️ Xcode / CLT 编译器工具链自动适配
+- **动态探测与 SDK 架构匹配**：
+  - `CloneEngine` 引入 `_resolve_clang_command` 编译器动态嗅探机制。
+  - 自动通过 `xcrun --sdk macosx clang` 配对当前系统的 macOS SDK sysroot，彻底解决测试版 Xcode / Command Line Tools 架构目标（如 `arm64e.x1-macos`）与 SDK 不匹配导致的编译链接失败问题。
+
+### 💼 内置企业微信 (WeCom) 分身规则
+- **开箱即用的多开支持**：
+  - 新增企业微信（`com.tencent.WeWorkMac`）内置配方，支持独立数据目录隔离与环境变量注入。
+
+### 🛡️ 安全加固与防注入/防篡改守卫
+- **集中输入校验与防篡改防护**：
+  - 引入 `atbclone.validation` 校验模块，对 Bundle ID 实施严格正则白名单（`^[A-Za-z0-9][A-Za-z0-9._-]*$`），严密校验环境变量键名、代理参数与分身名称防路径穿越。
+  - `Recipe` 与 `ProxyConfig` 模型开启 `validate_assignment = True`，堵住直接赋值绕过校验的漏洞。
+  - `CloneTask.__post_init__` 作为 CLI、GUI 与 update 流程统一的中央安全校验关卡。
+  - 新增防篡改删除守卫（`validate_deletion_target`），禁止误删或被恶意篡改的系统目录（`/System`、`/usr`、`/Library`）、`$HOME` 根目录、过浅层级路径及非 `.app` 目标。
+  - `clones.yaml` 状态文件写入后强制设为 `0600` 权限。
+  - 克隆引擎 Shell 脚本与 C Launcher 源码全面采用 `shlex.quote` 及元字符（`$`、反引号、双引号）深度转义。
+
+### 🧪 CI 自动化与质量保障
+- **持续集成与测试套件扩充**：
+  - 添加 GitHub Actions 自动化 CI 工作流（`.github/workflows/test.yml`），限定 macOS 运行环境与 Python 3.12。
+  - 添加标准 PR 模板与 CI 状态徽章。
+  - 自动化测试用例扩充至 554 项，覆盖 Keychain 存储、安全校验拦截、编译器探测与 GUI 交互，保持 100% 通过率。
+
 ---
 
 ## [v1.4.0] - 2026-09-05

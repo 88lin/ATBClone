@@ -148,7 +148,22 @@ mkdir -p dist/
 VERSION=$(grep -m 1 '^version =' pyproject.toml | cut -d '"' -f 2 || echo "0.1.0")
 echo "[+] Target version: v${VERSION}"
 
-# 5. Run Nuitka Build
+# 5. Compiler & SDK Environment Setup for macOS
+if command -v xcrun &>/dev/null; then
+    RESOLVED_SDKROOT="$(xcrun --sdk macosx --show-sdk-path 2>/dev/null || true)"
+    if [[ -n "${RESOLVED_SDKROOT}" && -d "${RESOLVED_SDKROOT}" ]]; then
+        export SDKROOT="${RESOLVED_SDKROOT}"
+        echo "[+] Setting SDKROOT: ${SDKROOT}"
+    fi
+    RESOLVED_CC="$(xcrun --sdk macosx --find clang 2>/dev/null || true)"
+    if [[ -n "${RESOLVED_CC}" && -x "${RESOLVED_CC}" ]]; then
+        export CC="${RESOLVED_CC}"
+        export CXX="${RESOLVED_CC}++"
+        echo "[+] Setting CC/CXX: ${CC}"
+    fi
+fi
+
+# 6. Run Nuitka Build
 echo "==> Compiling with Nuitka..."
 PYTHONNOUSERSITE=1 PYTHONPATH=src "${PYTHON_BIN}" -m nuitka \
     --onefile \

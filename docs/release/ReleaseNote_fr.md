@@ -4,6 +4,40 @@
 
 Ce document répertorie l'ensemble des mises à jour majeures, nouvelles fonctionnalités, optimisations et correctifs apportés à **ATBClone**.
 
+## [v1.5.0] - 2026-09-10
+
+### 🔐 Authentification proxy & Stockage sécurisé dans le trousseau (Keychain)
+- **Support des proxys authentifiés et trousseau macOS**:
+  - Ajout des champs `username` et `password` au modèle `ProxyConfig`, prenant en charge les proxys SOCKS5 et HTTP avec authentification.
+  - Implémentation du module `atbclone.core.keychain` pour stocker en toute sécurité les mots de passe proxy dans le trousseau d'accès macOS (Keychain Services / CLI `security`), éliminant tout stockage en clair dans les fichiers de configuration.
+  - Ajout des options CLI `--proxy-username` et `--proxy-password` avec saisie sécurisée interactive dans les commandes `clone`, `update` et `wizard`.
+  - Intégration des identifiants proxy, du bouton d'affichage du mot de passe et de la gestion Keychain dans l'assistant graphique (`WizardWindow`), la fenêtre d'édition (`CloneEditWindow`) et les paramètres généraux (`SettingsView`).
+  - Masquage systématique des identifiants (`redact_url_credentials`) dans `clone_inspector`, la commande CLI `list` et les vues graphiques pour prévenir toute fuite dans les journaux ou la console.
+
+### 🛠️ Adaptation automatique de la chaîne d'outils Xcode / CLT
+- **Sonde dynamique et correspondance SDK**:
+  - Implémentation du mécanisme de détection dynamique `_resolve_clang_command` dans `CloneEngine`.
+  - Liaison automatique via `xcrun --sdk macosx clang` avec le sysroot du SDK macOS actif, résolvant les échecs de compilation et d'édition de liens liés aux discordances d'architecture (telles que `arm64e.x1-macos`) sous les versions bêta de Xcode et Command Line Tools.
+
+### 💼 Recette intégrée pour WeCom (Enterprise WeChat)
+- **Prise en charge multi-instance prête à l'emploi**:
+  - Ajout d'une recette intégrée pour Enterprise WeChat / WeCom (`com.tencent.WeWorkMac`) avec isolation des données et injection des variables d'environnement.
+
+### 🛡️ Renforcement de la sécurité & Protection contre les injections shell
+- **Validation centralisée et protection contre les suppressions abusives**:
+  - Introduction du module `atbclone.validation` avec liste blanche stricte pour les Bundle IDs (`^[A-Za-z0-9][A-Za-z0-9._-]*$`), validation des variables d'environnement, des paramètres proxy et blocage des traversées de répertoires.
+  - Activation de `validate_assignment = True` dans les modèles `Recipe` et `ProxyConfig` pour bloquer les contournements lors de l'assignation d'attributs.
+  - Établissement de `CloneTask.__post_init__` comme point de contrôle de sécurité centralisé pour la CLI, l'interface graphique et les mises à jour.
+  - Ajout d'un garde-fou anti-altération (`validate_deletion_target`) empêchant la suppression destructrice des répertoires système (`/System`, `/usr`, `/Library`), de la racine `$HOME`, des chemins trop courts ou des cibles non-`.app`.
+  - Application stricte des permissions POSIX `0600` sur `clones.yaml`.
+  - Renforcement des scripts shell des moteurs de clonage avec `shlex.quote` et échappement complet des métacaractères (`$`, accents graves, guillemets).
+
+### 🧪 Automatisation CI & Assurance qualité
+- **Intégration continue et suite de tests**:
+  - Ajout du flux CI GitHub Actions (`.github/workflows/test.yml`) sous macOS avec Python 3.12.
+  - Ajout du modèle de PR standard et des badges d'état CI dans la documentation.
+  - Extension de la suite de tests automatisés à 554 tests avec un taux de réussite de 100 %.
+
 ---
 
 ## [v1.4.0] - 2026-09-05

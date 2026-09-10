@@ -4,6 +4,40 @@
 
 이 문서는 **ATBClone**의 모든 주요 업데이트, 새로운 기능, 성능 개선 및 버그 수정 사항을 기록합니다.
 
+## [v1.5.0] - 2026-09-10
+
+### 🔐 프록시 인증 및 Keychain 보안 저장소
+- **인증 프록시 지원 및 키체인 연동**:
+  - `ProxyConfig` 모델에 `username` 및 `password` 필드를 추가하여 인증이 필요한 SOCKS5 및 HTTP 프록시를 완벽히 지원합니다.
+  - `atbclone.core.keychain` 모듈을 도입하여 프록시 비밀번호를 macOS 시스템 키체인(Keychain Services / `security` CLI)에 안전하게 보관함으로써 설정 파일의 평문 노출을 방지합니다.
+  - CLI `clone`, `update`, `wizard` 명령어에 `--proxy-username` 및 `--proxy-password` 옵션과 대화형 보안 비밀번호 입력을 추가했습니다.
+  - GUI 복제 마법사(`WizardWindow`), 편집 창(`CloneEditWindow`), 전역 설정(`SettingsView`)에 프록시 자격증명 입력 및 Keychain 저장 설정을 통합했습니다.
+  - `clone_inspector`, CLI `list`, GUI 카드/상세보기/목록 화면에서 자격증명 마스킹(`redact_url_credentials`)을 적용하여 터미널 출력 및 로그로의 비밀번호 유출을 차단했습니다.
+
+### 🛠️ Xcode / CLT 컴파일러 툴체인 자동 적응
+- **동적 툴체인 탐색 및 SDK 정합**:
+  - `CloneEngine`에 `_resolve_clang_command` 동적 툴체인 탐색 메커니즘을 구현했습니다.
+  - `xcrun --sdk macosx clang`과 활성 macOS SDK sysroot를 자동으로 바인딩하여 베타 버전 Xcode / Command Line Tools의 아키텍처 불일치(예: `arm64e.x1-macos`)로 인한 컴파일/링크 오류를 해결했습니다.
+
+### 💼 기업 위챗 (WeCom) 기본 레시피 내장
+- **즉시 사용 가능한 다중 인스턴스 지원**:
+  - 기업 위챗(`com.tencent.WeWorkMac`) 기본 내장 레시피를 추가하여 격리된 데이터 디렉터리 및 환경 변수 주입을 지원합니다.
+
+### 🛡️ 보안 강화 및 쉘 인젝션/변조 방지 가드
+- **통합 입력 유효성 검증 및 안전 삭제 보호**:
+  - `atbclone.validation` 모듈을 도입하여 Bundle ID 정규식 화이트리스트(`^[A-Za-z0-9][A-Za-z0-9._-]*$`), 환경 변수 키 형식, 프록시 매개변수 및 경로 순회(Path Traversal) 방지 검증을 강화했습니다.
+  - `Recipe` 및 `ProxyConfig` 모델에 `validate_assignment = True`를 적용하여 속성 직접 할당을 통한 검증 우회를 차단했습니다.
+  - `CloneTask.__post_init__`을 CLI, GUI, update 전체 워크플로의 통합 보안 검증 관문으로 확립했습니다.
+  - 변조 방지 삭제 가드(`validate_deletion_target`)를 추가하여 시스템 디렉터리(`/System`, `/usr`, `/Library`), `$HOME` 루트, 얕은 깊이의 경로 또는 비 `.app` 대상의 파괴적 삭제를 방지했습니다.
+  - `clones.yaml` 상태 파일 생성 시 POSIX `0600` 권한을 강제 적용합니다.
+  - 복제 엔진의 쉘 스크립트 생성 및 C 런처 소스에서 `shlex.quote`와 메타문자(`$`, 백틱, 큰따옴표) 이스케이프를 철저히 처리했습니다.
+
+### 🧪 CI 자동화 및 품질 보증
+- **지속적 통합 및 테스트 확장**:
+  - GitHub Actions 자동화 CI 워크플로(`.github/workflows/test.yml`, macOS / Python 3.12)를 추가했습니다.
+  - 표준 PR 템플릿과 CI 빌드 상태 배지를 적용했습니다.
+  - 자동화 테스트 케이스를 554개로 확장하여 100% 통과율을 유지했습니다.
+
 ---
 
 ## [v1.4.0] - 2026-09-05

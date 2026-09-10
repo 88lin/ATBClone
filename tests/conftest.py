@@ -1,15 +1,18 @@
 """Pytest configuration and global fixtures for ATBClone test suite."""
 
+import asyncio
 import os
 import pytest
 from atbclone.core.i18n import set_language
 
 
 @pytest.fixture(autouse=True)
-def default_test_language(monkeypatch):
-    """Default test environment to English unless explicitly overridden by a test."""
+def default_test_environment(monkeypatch):
+    """Default test environment to English and standard asyncio event loop."""
     if "ATBCLONE_LANG" not in os.environ:
         monkeypatch.setenv("ATBCLONE_LANG", "en")
     set_language(None)
+    asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
     yield
     set_language(None)
+

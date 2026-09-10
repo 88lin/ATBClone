@@ -4,6 +4,40 @@
 
 このドキュメントには、**ATBClone** のすべての重要な更新、新機能、パフォーマンスの改善、およびバグ修正が記録されています。
 
+## [v1.5.0] - 2026-09-10
+
+### 🔐 プロキシ認証と Keychain 安全ストレージ
+- **認証付きプロキシ対応とキーチェーン連携**:
+  - `ProxyConfig` モデルに `username` および `password` フィールドを追加し、認証付き SOCKS5 / HTTP プロキシをフルサポート。
+  - `atbclone.core.keychain` モジュールを導入し、プロキシパスワードを macOS システムキーチェーン（Keychain Services / `security` CLI）に安全に保存。設定ファイルへの平文保存を防止。
+  - CLI の `clone`、`update`、`wizard` コマンドに `--proxy-username` および `--proxy-password` オプションと対話型セキュア入力プロンプトを追加。
+  - GUI クローンウィザード（`WizardWindow`）、編集ウィンドウ（`CloneEditWindow`）、一般設定（`SettingsView`）に認証情報入力と Keychain 管理を統合。
+  - `clone_inspector`、CLI `list`、GUI のカード/詳細/リスト表示において認証情報マスキング（`redact_url_credentials`）を適用し、ターミナル出力やログへのパスワード漏洩を防止。
+
+### 🛠️ Xcode / CLT コンパイラツールチェーンの自動適合
+- **動的プロービングと SDK 整合**:
+  - `CloneEngine` に `_resolve_clang_command` 動的検出メカニズムを実装。
+  - `xcrun --sdk macosx clang` を使用して適切な macOS SDK sysroot を自動バインドし、ベータ版 Xcode / Command Line Tools のアーキテクチャ不一致（例: `arm64e.x1-macos`）によるコンパイル/リンクエラーを解消。
+
+### 💼 企業微信 (WeCom) の組み込みレシピ追加
+- **即時利用可能なマルチインスタンス対応**:
+  - 企業微信（`com.tencent.WeWorkMac`）の組み込みレシピを追加し、データディレクトリの隔離と環境変数注入をサポート。
+
+### 🛡️ セキュリティ強化とインジェクション/改ざん防止ガード
+- **統合入力バリデーションと安全削除ガード**:
+  - `atbclone.validation` モジュールを導入し、Bundle ID の正規表現ホワイトリスト（`^[A-Za-z0-9][A-Za-z0-9._-]*$`）、環境変数キー、プロキシ設定、パストラバーサル防止を厳格に検証。
+  - `Recipe` および `ProxyConfig` モデルで `validate_assignment = True` を有効化し、プロパティ直接代入による検証バイパスを防止。
+  - `CloneTask.__post_init__` を CLI / GUI / update 共通の中央セキュリティ検証ポイントとして確立。
+  - 改ざん防止削除ガード（`validate_deletion_target`）を追加し、システムディレクトリ（`/System`, `/usr`, `/Library`）、`$HOME` 直下、浅いパス、非 `.app` ターゲットの誤削除や不正削除を遮断。
+  - `clones.yaml` のファイルパーミッションを書き込み時に `0600` に強制設定。
+  - クローンエンジンのシェルスクリプト生成および C ランチャーで `shlex.quote` とメタ文字（`$`, バッククォート, ダブルクォート）のエスケープ処理を徹底。
+
+### 🧪 CI 自動化と品質保証
+- **継続的インテグレーションとテスト拡充**:
+  - GitHub Actions による CI 自動テストワークフロー（`.github/workflows/test.yml`、macOS / Python 3.12 限定）を追加。
+  - 標準 PR テンプレートおよび CI ビルドバッジを整備。
+  - 自動テストスイートを 554 件に拡充し、合格率 100% を達成。
+
 ---
 
 ## [v1.4.0] - 2026-09-05

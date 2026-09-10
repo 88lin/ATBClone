@@ -4,6 +4,40 @@
 
 All notable changes, new features, improvements, and bug fixes for **ATBClone** are documented in this file.
 
+## [v1.5.0] - 2026-09-10
+
+### 🔐 Proxy Authentication & Keychain Secure Storage
+- **Authenticated Proxy Support**:
+  - Enhanced `ProxyConfig` model with `username` and `password` fields, supporting authenticated SOCKS5 and HTTP proxies.
+  - Implemented `atbclone.core.keychain` module to securely store and retrieve proxy passwords via the macOS Keychain (`security` CLI / Keychain Services), preventing credentials from being saved in plaintext.
+  - Added `--proxy-username` and `--proxy-password` CLI options with interactive secure password entry across `clone`, `update`, and `wizard` commands.
+  - Integrated proxy credential inputs, password visibility toggles, and Keychain security controls into GUI Clone Wizard (`WizardWindow`), Clone Edit (`CloneEditWindow`), and Global Settings (`SettingsView`).
+  - Integrated credential redaction (`redact_url_credentials`) across `clone_inspector`, CLI `list`, and GUI card/detail views to prevent password leakage in terminal output and UI logs.
+
+### 🛠️ Xcode / CLT Toolchain Dynamic Probing
+- **Compiler Compatibility & Auto-Adaptation**:
+  - Implemented dynamic toolchain probing mechanism `_resolve_clang_command` in `CloneEngine`.
+  - Automatically pairs `xcrun --sdk macosx clang` with the active macOS SDK sysroot, resolving compilation and linking failures caused by architecture target discrepancies (such as `arm64e.x1-macos`) under beta Xcode and Command Line Tools.
+
+### 💼 Enterprise WeChat (WeCom) Built-in Recipe
+- **Out-of-the-Box Multi-Instance Support**:
+  - Added built-in recipe for Enterprise WeChat / WeCom (`com.tencent.WeWorkMac`), supporting isolated data directories and environment variable redirection.
+
+### 🛡️ Security Hardening & Input Injection Defense
+- **Centralized Validation & Anti-Tamper Guard**:
+  - Introduced `atbclone.validation` module enforcing strict whitelists for Bundle IDs (`^[A-Za-z0-9][A-Za-z0-9._-]*$`), environment variable keys, proxy parameters, and clone name path-traversal prevention.
+  - Enabled `validate_assignment = True` in Pydantic models `Recipe` and `ProxyConfig` to block attribute assignment bypasses.
+  - Established `CloneTask.__post_init__` as a unified validation chokepoint across CLI, GUI, and update workflows.
+  - Added anti-tamper deletion guard (`validate_deletion_target`) preventing destructive removal of system directories (`/System`, `/usr`, `/Library`), `$HOME` root, shallow paths, or non-.app targets.
+  - Enforced `0600` POSIX permissions on `clones.yaml`.
+  - Hardened shell script generation in clone engines using `shlex.quote` and metacharacter escaping (`$`, backticks, double quotes).
+
+### 🧪 CI/CD Automation & Quality Assurance
+- **Automated Testing & Expanded Test Suite**:
+  - Added GitHub Actions automated CI testing workflow (`.github/workflows/test.yml`) on macOS runners restricted to Python 3.12.
+  - Added standard PR template and CI build status badges to documentation.
+  - Expanded automated test suite to 554 unit, GUI, security, and integration tests with a 100% pass rate.
+
 ---
 
 ## [v1.4.0] - 2026-09-05
