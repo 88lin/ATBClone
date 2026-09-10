@@ -833,6 +833,94 @@ class TestProcessSingletonFrameworkPatching:
             assert "Patch ProcessSingleton in embedded frameworks" in script
 
 
+class TestWemeetIsolation:
+    """Tests for Tencent Meeting dual-lock isolation (verified on 3.45.3).
+
+    Root cause: two hardcoded global locks ignore HOME/TMPDIR --
+      lock 1: MD5("com.tencent.wemeet.WemeetLauncher") -> /tmp/baab259e...
+      lock 2: MD5("com.tencent.meeting") -> /tmp/d3f3c61c...
+    Losers forward via SendMessage and exit(2). Fix: same-length tail-char
+    replacement per clone in Mach-O binaries only.
+    """
+
+    def test_wemeet_slot_from_bundle_id(self, sample_task):
+        sample_task.new_bundle_id = "com.tencent.meeting.atbclone.4"
+        sample_task.clone_name = "TencentMeeting4"
+        assert HardCloneEngine._wemeet_slot_for_task(sample_task) == "4"
+
+    def test_wemeet_slot_falls_back_to_clone_name(self, sample_task):
+        sample_task.new_bundle_id = "com.tencent.meeting.atbclone.X"
+        sample_task.clone_name = "TencentMeeting6"
+        assert HardCloneEngine._wemeet_slot_for_task(sample_task) == "6"
+
+    def test_wemeet_slot_multidigit_stays_single_char(self, sample_task):
+        sample_task.new_bundle_id = "com.tencent.meeting.atbclone.12"
+        sample_task.clone_name = "TencentMeeting12"
+        slot = HardCloneEngine._wemeet_slot_for_task(sample_task)
+        assert len(slot) == 1 and slot in HardCloneEngine._WEMEET_SLOT_ALPHABET
+
+    def test_patch_wemeet_locks_rewrites_macho_only(self, tmp_path):
+        app_dir = tmp_path / "TencentMeeting4.app"
+        macos_dir = app_dir / "Contents" / "MacOS"
+        macos_dir.mkdir(parents=True)
+        macho = macos_dir / "TencentMeeting"
+        payload = (
+            b"\xcf\xfa\xed\xfe"
+            + b"\x00" * 64
+            + b"lock:com.tencent.wemeet.WemeetLauncher|bid:com.tencent.meeting|end"
+        )
+        macho.write_bytes(payload)
+        # Non-Mach-O decoys must stay untouched.
+        plist = app_dir / "Contents" / "Info.plist"
+        plist.write_bytes(b"com.tencent.meeting.atbclone.4 WemeetLauncher")
+        nib = macos_dir / "view.nib"
+        nib.write_bytes(b"WemeetLauncher com.tencent.meeting")
+
+        assert HardCloneEngine.patch_wemeet_locks(app_dir, "4") is True
+        patched = macho.read_bytes()
+        assert b"WemeetLauncher" not in patched
+        assert b"WemeetLaunche4" in patched
+        assert b"com.tencent.meeting" not in patched
+        assert b"com.tencent.meetin4" in patched
+        # Same-length guarantee keeps Mach-O offsets stable.
+        assert len(patched) == len(payload)
+        assert plist.read_bytes().find(b"WemeetLauncher") != -1
+        assert nib.read_bytes().find(b"com.tencent.meeting") != -1
+
+    def test_patch_wemeet_locks_no_contents(self, tmp_path):
+        assert HardCloneEngine.patch_wemeet_locks(tmp_path / "Empty.app", "2") is False
+
+    def test_hard_clone_script_includes_wemeet_isolation(self, sample_task):
+        sample_task.source.bundle_id = "com.tencent.meeting"
+        sample_task.new_bundle_id = "com.tencent.meeting.atbclone.4"
+        sample_task.clone_name = "TencentMeeting4"
+        with patch("atbclone.executor.runner.Runner.run") as mock_run:
+            HardCloneEngine.execute(sample_task, needs_admin=False)
+            script, _ = mock_run.call_args[0]
+            assert "Wemeet isolation" in script
+            assert "WemeetLaunche" in script
+            assert "com.tencent.meetin" in script
+            assert "Delete :CFBundleURLTypes" in script
+            assert "Patch ProcessSingleton in embedded frameworks" not in script
+
+    def test_hard_clone_script_includes_wemeet_for_legacy_id(self, sample_task):
+        sample_task.source.bundle_id = "com.tencent.wemeet"
+        sample_task.new_bundle_id = "com.tencent.wemeet.atbclone.2"
+        sample_task.clone_name = "TencentMeeting2"
+        with patch("atbclone.executor.runner.Runner.run") as mock_run:
+            HardCloneEngine.execute(sample_task, needs_admin=False)
+            script, _ = mock_run.call_args[0]
+            assert "Wemeet isolation" in script
+
+    def test_hard_clone_script_omits_wemeet_for_other_apps(self, sample_task):
+        sample_task.source.bundle_id = "com.google.Chrome"
+        sample_task.recipe.patch_wemeet_isolation = False
+        with patch("atbclone.executor.runner.Runner.run") as mock_run:
+            HardCloneEngine.execute(sample_task, needs_admin=False)
+            script, _ = mock_run.call_args[0]
+            assert "Wemeet isolation" not in script
+
+
 class TestCefFrameworkPatchingAndSymlinks:
     """Tests for Chromium Embedded Framework (CEF) patch gating and symlink whitelist generation."""
 

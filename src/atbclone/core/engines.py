@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import os
+import re
 import shlex
 import struct
 import textwrap
@@ -1037,6 +1038,182 @@ CHATGPT_HOOK_EOF
             chmod +x {dst_frameworks}/libatbclone_chatgpt_hook.dylib
         """).strip() + "\n"
 
+    # Tencent Meeting (Wemeet) dual global locks, verified on 3.45.3:
+    #   lock 1: MD5("com.tencent.wemeet.WemeetLauncher")
+    #           -> /tmp/baab259e9d9912ee7e2d6daf05db5829
+    #   lock 2: MD5("com.tencent.meeting")
+    #           -> /tmp/d3f3c61c93ee6f6463feed44a4cd5673
+    # Both paths are hardcoded and ignore the per-clone HOME/TMPDIR, so
+    # every clone (and the main app) flock()s the same /tmp files and the
+    # loser forwards to the running instance via SendMessage and exits(2).
+    # Per-clone fix: same-length tail-char replacement in Mach-O binaries
+    # only (never plist/nib/CodeResources):
+    #   "WemeetLauncher" (14B) -> "WemeetLauncheX"
+    #   "com.tencent.meeting" (19B) -> "com.tencent.meetinX"
+    # where X is one slot char derived from the clone number. Distinct X
+    # per clone yields distinct MD5s and hence distinct lock files plus
+    # distinct Mach service names.
+    WEMEET_BUNDLE_IDS = ("com.tencent.meeting", "com.tencent.wemeet")
+    _WEMEET_LAUNCHER_NEEDLE = b"WemeetLauncher"
+    _WEMEET_BUNDLE_NEEDLE = b"com.tencent.meeting"
+    _WEMEET_SLOT_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+    @classmethod
+    def _wemeet_slot_for_task(cls, task: CloneTask) -> str:
+        """Derive a single per-clone slot char from the clone number.
+
+        Prefers the trailing digits of new_bundle_id ("...atbclone.N"),
+        falls back to the trailing digits of clone_name, then 1. The number
+        is mapped through a 36-char alphabet so multi-digit numbers still
+        fit the single-char same-length replacement budget.
+        """
+        num = 1
+        for candidate in (
+            getattr(task, "new_bundle_id", "") or "",
+            getattr(task, "clone_name", "") or "",
+        ):
+            match = re.search(r"(\d+)$", candidate.strip())
+            if match:
+                try:
+                    num = int(match.group(1))
+                except ValueError:
+                    continue
+                break
+        try:
+            slot_index = int(num) % len(cls._WEMEET_SLOT_ALPHABET)
+        except (TypeError, ValueError):
+            slot_index = 1
+        return cls._WEMEET_SLOT_ALPHABET[slot_index]
+
+    @staticmethod
+    def _is_wemeet_task(task: CloneTask) -> bool:
+        """Return True when the task targets Tencent Meeting (either bundle id)."""
+        bundle_ids = HardCloneEngine.WEMEET_BUNDLE_IDS
+        return bool(
+            getattr(task.recipe, "patch_wemeet_isolation", False)
+            or getattr(task.source, "bundle_id", "") in bundle_ids
+            or getattr(task.recipe, "bundle_id", "") in bundle_ids
+            or any(
+                (getattr(task, "new_bundle_id", "") or "").startswith(bid)
+                for bid in bundle_ids
+            )
+        )
+
+    @classmethod
+    def patch_wemeet_locks(cls, dest_path: Path, slot: str) -> bool:
+        """Python helper: per-clone same-length lock-string replacement.
+
+        Walks dest_path/Contents for Mach-O binaries and replaces the two
+        hardcoded lock strings with slot-suffixed variants. Returns True if
+        at least one file was patched. Skips symlinks and non-Mach-O files
+        (plist/nib/CodeResources are never touched).
+        """
+        if not slot or len(slot) != 1:
+            return False
+        launcher_replacement = b"WemeetLaunche" + slot.encode("ascii", "ignore")
+        bundle_replacement = b"com.tencent.meetin" + slot.encode("ascii", "ignore")
+        if len(launcher_replacement) != len(cls._WEMEET_LAUNCHER_NEEDLE):
+            return False
+        if len(bundle_replacement) != len(cls._WEMEET_BUNDLE_NEEDLE):
+            return False
+
+        contents_dir = Path(dest_path) / "Contents"
+        if not contents_dir.is_dir():
+            return False
+
+        patched_any = False
+        for root, _, files in os.walk(contents_dir):
+            for fname in files:
+                fpath = Path(root) / fname
+                if fpath.is_symlink() or not fpath.is_file():
+                    continue
+                try:
+                    with open(fpath, "rb") as fp:
+                        header = fp.read(4)
+                    if header not in (b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf"):
+                        continue
+                    with open(fpath, "rb") as fp:
+                        data = bytearray(fp.read())
+                    changed = False
+                    if cls._WEMEET_LAUNCHER_NEEDLE in data:
+                        data = bytearray(
+                            data.replace(
+                                cls._WEMEET_LAUNCHER_NEEDLE, launcher_replacement
+                            )
+                        )
+                        changed = True
+                    if cls._WEMEET_BUNDLE_NEEDLE in data:
+                        data = bytearray(
+                            data.replace(cls._WEMEET_BUNDLE_NEEDLE, bundle_replacement)
+                        )
+                        changed = True
+                    if changed:
+                        with open(fpath, "wb") as fp:
+                            fp.write(data)
+                        patched_any = True
+                except (OSError, ValueError):
+                    continue
+        return patched_any
+
+    @classmethod
+    def _build_wemeet_isolation_cmd(cls, task: CloneTask) -> str:
+        """Return a shell snippet that per-clone patches the Wemeet dual locks.
+
+        Only Mach-O binaries under Contents are rewritten; plist/nib/
+        CodeResources files are skipped. Runs before codesign in the clone
+        script. Also strips CFBundleURLTypes so clones stop activating each
+        other via the shared wemeet:// scheme.
+        """
+        if not cls._is_wemeet_task(task):
+            return ""
+        slot = cls._wemeet_slot_for_task(task)
+        rel_plist = getattr(task.source, "relative_plist_path", Path("Contents/Info.plist"))
+        dst_plist = shlex.quote(str(task.dest_path / rel_plist))
+        # Double-quoted Python literal (the surrounding `python3 -c '...'` is
+        # single-quoted, so double quotes are shell-safe; macOS paths contain
+        # no double quotes after this escape).
+        dst_py = str(task.dest_path).replace("\\", "\\\\").replace('"', '\\"')
+        strip_schemes_cmd = ""
+        if getattr(task.recipe, "strip_url_schemes", False) or True:
+            strip_schemes_cmd = f'/usr/libexec/PlistBuddy -c "Delete :CFBundleURLTypes" {dst_plist} 2>/dev/null || true\n'
+        return textwrap.dedent(f"""\
+            # Wemeet isolation: per-clone lock strings (slot {slot}) + strip URL schemes
+            {strip_schemes_cmd}python3 -c '
+import os
+dst = "{dst_py}"
+slot = "{slot}"
+launcher_old = b"WemeetLauncher"
+launcher_new = b"WemeetLaunche" + slot.encode("ascii")
+bundle_old = b"com.tencent.meeting"
+bundle_new = b"com.tencent.meetin" + slot.encode("ascii")
+contents = os.path.join(dst, "Contents")
+if os.path.isdir(contents):
+    for root, _, files in os.walk(contents):
+        for fname in files:
+            fpath = os.path.join(root, fname)
+            if os.path.islink(fpath) or not os.path.isfile(fpath):
+                continue
+            try:
+                with open(fpath, "rb") as f:
+                    if f.read(4) not in (b"\\xcf\\xfa\\xed\\xfe", b"\\xfe\\xed\\xfa\\xcf"):
+                        continue
+                    f.seek(0)
+                    data = bytearray(f.read())
+                changed = False
+                if launcher_old in data:
+                    data = bytearray(data.replace(launcher_old, launcher_new))
+                    changed = True
+                if bundle_old in data:
+                    data = bytearray(data.replace(bundle_old, bundle_new))
+                    changed = True
+                if changed:
+                    with open(fpath, "wb") as f:
+                        f.write(data)
+            except Exception:
+                pass
+' 2>/dev/null || true
+        """)
+
     @staticmethod
     def _build_symlink_whitelist_snippet(task: CloneTask) -> str:
         """Return a shell snippet that creates symlinks for items in symlink_whitelist."""
@@ -1354,13 +1531,15 @@ CHATGPT_HOOK_EOF
             or getattr(task, "new_bundle_id", "").startswith("com.openai.codex")
             or getattr(task, "new_bundle_id", "").startswith("com.openai.chat")
         )
+        is_wemeet = cls._is_wemeet_task(task)
 
         # Build framework singleton patcher command ONLY when explicitly enabled by recipe
-        # and NOT for Feishu/Lark or ChatGPT which use dedicated Cocoa/POSIX hook isolation.
+        # and NOT for Feishu/Lark, ChatGPT or Wemeet which use dedicated isolation.
         needs_singleton_patch = (
             getattr(task.recipe, "patch_framework_singleton", False)
             and not is_lark
             and not is_chatgpt
+            and not is_wemeet
         )
         singleton_patch_cmd = (
             cls._build_singleton_patch_cmd(task.dest_path)
@@ -1387,6 +1566,13 @@ CHATGPT_HOOK_EOF
         chatgpt_isolation_cmd = (
             cls._build_chatgpt_isolation_cmd(task)
             if is_chatgpt
+            else ""
+        )
+
+        # Build Wemeet isolation command ONLY when cloning Tencent Meeting
+        wemeet_isolation_cmd = (
+            cls._build_wemeet_isolation_cmd(task)
+            if is_wemeet
             else ""
         )
 
@@ -1478,7 +1664,7 @@ chmod -R u+w {dst} 2>/dev/null || true
 {icon_cmd}{exec_prep_cmd}
 {pref_seeding}
 {symlink_snippet}
-{singleton_patch_cmd}{cef_patch_cmd}{lark_isolation_cmd}{chatgpt_isolation_cmd}{framework_prune_cmd}xattr -cr {dst} 2>/dev/null || true
+{singleton_patch_cmd}{cef_patch_cmd}{lark_isolation_cmd}{chatgpt_isolation_cmd}{wemeet_isolation_cmd}{framework_prune_cmd}xattr -cr {dst} 2>/dev/null || true
 {codesign_cmds}codesign -vv --deep --strict {dst}
 {lsregister_cmd}
 """
